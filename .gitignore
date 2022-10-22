@@ -1,0 +1,10 @@
+/voting-app/node_modules
+/voting-app/public/hot
+/voting-app/public/storage
+/voting-app/storage/*.key
+/voting-app/vendor
+/voting-app/.env
+/voting-app/.env.backup
+/voting-app/.phpunit.result.cache
+.docker/
+.idea/

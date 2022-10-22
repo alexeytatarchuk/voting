@@ -1,0 +1,81 @@
+version: '3'
+services:
+  nginx:
+    image: nginx
+    volumes:
+      - ./voting-app/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    deploy:
+      mode: replicated
+      replicas: 2
+      labels:
+        - "traefik.http.services.nginx.loadbalancer.server.port=80"
+        - "traefik.http.routers.nginx.rule=Host(`voting.node1`) || Host(`voting.node2`) || Host(`voting.node3`)"
+  traefik:
+    image: traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.swarmmode"
+      - "--providers.docker.network=voting_default"
+    ports:
+      - "80:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - "node.role == manager"
+      labels:
+        - "traefik.http.services.voting.loadbalancer.server.port=80"
+        - "traefik.http.middlewares.auth.basicauth.users=admin:8a1d8c7c9d3526c97ade5b83aa59cbc1"
+  voting:
+    build: ./voting-app/.
+    environment:
+      - APP_NAME=VoteApp
+      - APP_ENV=production
+      - APP_KEY=base64:WcIFQQUYOUUH4oWc/SDBHQ6XGvYoTOryXMkfUNbZJPM=
+      - APP_DEBUG="false"
+      - LOG_CHANNEL=stderr
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT="3306"
+      - DB_DATABASE=voting
+      - DB_USERNAME=user
+      - DB_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=""
+      - SESSION_DRIVER=redis
+      - SESSION_CONNECTION=session
+      - CACHE_DRIVER=redis
+  mysql:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_DATABASE=voting
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+  redis:
+    image: redis
+  fluentd:
+    image: fluentd
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+    deploy:
+      mode: replicated
+      replicas: 3
+  elasticsearch:
+    image: elasticsearch
+    volumes:
+      - /mnt/elasticsearch:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          memory: "1GB"
+  kibana:
+    image: kibana
+    deploy:
+      labels:
+        - "traefik.http.routers.kibana.middlewares=auth"
+        - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+        - "traefik.http.routers.kibana.rule=Host(`kibana.node1`) || Host(`kibana.node2`) || Host(`kibana.node3`)"
